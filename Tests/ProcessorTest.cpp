@@ -496,6 +496,23 @@ int main()
         passed = passed && std::abs (zeroVu - 20.0f / 23.0f) < 1.0e-5f;
         passed = passed && oneDbGr > (1.0f / 24.0f) && oneDbGr < 1.0f;
         passed = passed && std::abs (twentyFourDbGr - 1.0f) < 1.0e-5f;
+
+        float needle = 0.0f, velocity = 0.0f, peak = 0.0f;
+        for (int frame = 0; frame < 48; ++frame)
+        {
+            VUMeterComponent::advanceNeedleState (needle, velocity, 1.0f, 1.0f / 60.0f);
+            peak = juce::jmax (peak, needle);
+        }
+        const bool settledAfterRise = std::abs (needle - 1.0f) < 0.002f
+                                   && std::abs (velocity) < 0.02f;
+        for (int frame = 0; frame < 60; ++frame)
+            VUMeterComponent::advanceNeedleState (needle, velocity, 0.0f, 1.0f / 60.0f);
+        std::printf ("VU needle: peak %.3f after rise, settled %s, fall end %.4f\n",
+                     static_cast<double> (peak), settledAfterRise ? "yes" : "no",
+                     static_cast<double> (needle));
+        passed = passed && peak > 1.01f && peak < 1.06f;
+        passed = passed && settledAfterRise;
+        passed = passed && std::abs (needle) < 0.002f && std::isfinite (needle);
     }
 
     // 10. Vari-mu coupling: gain reduction must park the tube's operating point

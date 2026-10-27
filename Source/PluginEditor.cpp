@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 
 namespace
 {
@@ -12,9 +13,9 @@ namespace
     // visual work and the controls stay plain black hardware.
     // This is an original EON surface: the layout grammar is referenced, not
     // the commercial product's faceplate, logo, or artwork.
-    const juce::Colour panelTop    { 0xff3a4045 };
-    const juce::Colour panelBottom { 0xff1c2023 };
-    const juce::Colour panelEdge   { 0xff0e1012 };
+    const juce::Colour panelTop    { 0xff2c2c29 };
+    const juce::Colour panelBottom { 0xff131311 };
+    const juce::Colour panelEdge   { 0xff08090a };
     const juce::Colour plateCream  { 0xffe9dfc6 };
     const juce::Colour plateShadow { 0xff111315 };
     const juce::Colour screwColour { 0xffa9a096 };
@@ -23,7 +24,64 @@ namespace
     const juce::Colour accentGold  { 0xffe4bd6a };
     const juce::Colour accentRed   { 0xffc8503c };
 
-    constexpr int legendLineHeight = 15;
+    constexpr int channelHeaderHeight = 20;
+    constexpr int legendLineHeight = 16;
+    constexpr int channelColumnGap = 14;
+
+    // Two small tiles stand in for paint and age: a low-frequency cloud that
+    // varies across the panel, and full-resolution grain. Both are generated
+    // once and tiled by the painter, so the faceplate keeps its tooth at any
+    // window size without shipping a photograph of someone else's hardware.
+    const juce::Image& panelCloudTile()
+    {
+        static const juce::Image tile = []
+        {
+            juce::Image small (juce::Image::ARGB, 64, 64, true);
+            juce::Random random (0x670a1e);
+            for (int y = 0; y < 64; ++y)
+            {
+                for (int x = 0; x < 64; ++x)
+                {
+                    const float a = random.nextFloat();
+                    const bool light = random.nextBool();
+                    small.setPixelAt (x, y, (light ? juce::Colours::white
+                                                   : juce::Colours::black)
+                                                .withAlpha (0.010f + a * 0.030f));
+                }
+            }
+
+            juce::Image scaled (juce::Image::ARGB, 512, 512, true);
+            juce::Graphics g (scaled);
+            g.setImageResamplingQuality (juce::Graphics::mediumResamplingQuality);
+            g.drawImage (small, juce::Rectangle<float> (0.0f, 0.0f, 512.0f, 512.0f));
+            return scaled;
+        }();
+        return tile;
+    }
+
+    const juce::Image& panelGrainTile()
+    {
+        static const juce::Image tile = []
+        {
+            juce::Image image (juce::Image::ARGB, 256, 256, true);
+            juce::Random random (0x670b0c);
+            for (int y = 0; y < 256; ++y)
+            {
+                for (int x = 0; x < 256; ++x)
+                {
+                    const float a = random.nextFloat();
+                    if (a > 0.55f)
+                        continue;
+                    const bool light = random.nextBool();
+                    image.setPixelAt (x, y, (light ? juce::Colours::white
+                                                   : juce::Colours::black)
+                                                .withAlpha (random.nextFloat() * 0.055f));
+                }
+            }
+            return image;
+        }();
+        return tile;
+    }
 
     struct EditorLayout
     {
@@ -47,16 +105,17 @@ namespace
         layout.toolbar = frame.removeFromTop (26);
         layout.face = frame;
 
-        // Two stacked channel rows (upper = LEFT, lower = RIGHT) match the
-        // 670's dual-mono presentation, with a shared utility strip beneath.
-        // Tall enough for a full-size knob cell (legend + gap + hardware
-        // knob) plus the dial-shaped gain-reduction meter beside it.
-        constexpr int utilityHeight = 104;
-        constexpr int utilityGap = 12;
-        auto field = layout.face;
+        // The two channel decks and the utility deck form one inset control
+        // field. The utility band takes a deliberate share of the height at
+        // every window size so its two switch ranks never collapse into the
+        // channel legends.
+        auto field = layout.face.reduced (12, 8);
+        const int utilityHeight = juce::jlimit (146, 174,
+                                                juce::roundToInt (field.getHeight() * 0.22f));
+        constexpr int utilityGap = 14;
         layout.utilityStrip = field.removeFromBottom (utilityHeight);
         field.removeFromBottom (utilityGap);
-        constexpr int rowGap = 6;
+        constexpr int rowGap = 8;
         const int rowHeight = (field.getHeight() - rowGap) / 2;
         layout.upperStrip = field.removeFromTop (rowHeight);
         field.removeFromTop (rowGap);
@@ -64,28 +123,44 @@ namespace
         return layout;
     }
 
-    void placeKnob (juce::Rectangle<int> bounds, juce::Slider& slider, juce::Label& label)
+    /** A channel control cell: a shared legend baseline above one fitted knob.
+        Keeping the label in the cell's top row makes every control in a deck
+        share one typographic line, regardless of its knob diameter. */
+    void placeKnob (juce::Rectangle<int> bounds, juce::Slider& slider, juce::Label& label,
+                    int maxKnobSize, bool alignToTop = false)
     {
-        auto labelArea = bounds.removeFromBottom (26).reduced (2, 0);
-        bounds.removeFromBottom (4); // guaranteed air gap between knob and typography
-        auto knobArea = bounds.reduced (5, 2);
-        // The reference panel packs its controls on a tight grid with generous
-        // knob diameters, so the cap is raised to fill the cell. Legibility is
-        // preserved by the printed scale living outside the knob, not by
-        // shrinking the knob.
-        const int knobSize = juce::jmax (1, juce::jmin (92, juce::jmin (knobArea.getWidth(),
-                                                                     knobArea.getHeight())));
+        auto cell = bounds.reduced (2, 0);
+        if (alignToTop)
+        {
+            auto labelArea = cell.removeFromTop (legendLineHeight);
+            cell.removeFromTop (5);
+            const int knobSize = juce::jmax (1, juce::jmin (maxKnobSize,
+                                                            juce::jmin (cell.getWidth(),
+                                                                        cell.getHeight())));
+            slider.setBounds (cell.removeFromTop (knobSize)
+                                  .withSizeKeepingCentre (knobSize, knobSize));
+            label.setBounds (labelArea.reduced (1, 0));
+            return;
+        }
 
-        slider.setBounds (knobArea.withSizeKeepingCentre (knobSize, knobSize));
-        label.setBounds (labelArea);
+        const int knobSize = juce::jmax (1, juce::jmin (maxKnobSize,
+                                                        juce::jmin (cell.getWidth(),
+                                                                    cell.getHeight() - legendLineHeight - 5)));
+        const int clusterHeight = legendLineHeight + 5 + knobSize;
+        auto cluster = cell.withSizeKeepingCentre (cell.getWidth(), clusterHeight);
+        auto labelArea = cluster.removeFromTop (legendLineHeight);
+        cluster.removeFromTop (5);
+
+        slider.setBounds (cluster.withSizeKeepingCentre (knobSize, knobSize));
+        label.setBounds (labelArea.reduced (1, 0));
     }
 
     void placeKnobRow (juce::Rectangle<int> row,
-                       std::initializer_list<std::pair<juce::Slider*, juce::Label*>> controls)
+                       std::initializer_list<std::pair<juce::Slider*, juce::Label*>> controls,
+                       int maxKnobSize)
     {
-        constexpr int gap = 2;
         const int count = static_cast<int> (controls.size());
-        const int usableWidth = juce::jmax (0, row.getWidth() - gap * (count - 1));
+        const int usableWidth = juce::jmax (0, row.getWidth() - channelColumnGap * (count - 1));
         const int baseCellWidth = count > 0 ? usableWidth / count : 0;
         const int extraPixels = count > 0 ? usableWidth % count : 0;
         int index = 0;
@@ -94,10 +169,12 @@ namespace
         {
             const int cellWidth = baseCellWidth + (index < extraPixels ? 1 : 0);
             auto cell = row.removeFromLeft (cellWidth);
-            placeKnob (cell, *slider, *label);
+            label->setFont (juce::FontOptions (8.8f, juce::Font::bold));
+            label->setMinimumHorizontalScale (0.55f);
+            placeKnob (cell, *slider, *label, maxKnobSize, true);
 
             if (++index < count)
-                row.removeFromLeft (gap);
+                row.removeFromLeft (channelColumnGap);
         }
     }
 
@@ -111,13 +188,13 @@ namespace
         slider.setNumDecimalPlacesToDisplay (text == "Ratio" ? 1 : 2);
         parent.addAndMakeVisible (slider);
 
-        // The 670 silkscreens a short all-caps legend under each control and
+        // The 670 silkscreens a short all-caps legend above each control and
         // keeps the functional description in the tooltip, so the faceplate
         // stays uncluttered like the hardware.
         label.setText (text.toUpperCase(), juce::dontSendNotification);
         label.setJustificationType (juce::Justification::centred);
         label.setColour (juce::Label::textColourId, creamText);
-        label.setFont (juce::FontOptions (big ? 10.0f : 9.0f, juce::Font::bold));
+        label.setFont (juce::FontOptions (big ? 10.0f : 9.5f, juce::Font::bold));
         label.setMinimumHorizontalScale (0.72f);
         juce::ignoreUnused (function);
         parent.addAndMakeVisible (label);
@@ -125,12 +202,22 @@ namespace
 
     void drawScrew (juce::Graphics& g, juce::Point<float> centre)
     {
-        g.setColour (screwColour.darker (0.45f));
-        g.fillEllipse (centre.x - 5.0f, centre.y - 4.5f, 10.0f, 10.0f);
-        g.setColour (screwColour);
-        g.fillEllipse (centre.x - 3.5f, centre.y - 3.5f, 7.0f, 7.0f);
-        g.setColour (juce::Colours::black.withAlpha (0.6f));
-        g.drawLine (centre.x - 2.6f, centre.y, centre.x + 2.6f, centre.y, 1.1f);
+        // Slotted pan-head screw: dark seat, turned chrome dome, slot cut with
+        // a lit lower lip. The worn heads in the reference are never uniform,
+        // so the bevel is slightly brighter on the upper left only.
+        g.setColour (juce::Colours::black.withAlpha (0.65f));
+        g.fillEllipse (centre.x - 6.0f, centre.y - 5.0f, 12.0f, 12.0f);
+        juce::ColourGradient head (juce::Colour (0xffd8d0c2), centre.x - 3.0f, centre.y - 3.5f,
+                                   juce::Colour (0xff57504a), centre.x + 3.5f, centre.y + 3.5f,
+                                   true);
+        g.setGradientFill (head);
+        g.fillEllipse (centre.x - 4.5f, centre.y - 4.5f, 9.0f, 9.0f);
+        g.setColour (juce::Colours::white.withAlpha (0.35f));
+        g.drawEllipse (centre.x - 4.2f, centre.y - 4.2f, 8.4f, 8.4f, 0.8f);
+        g.setColour (juce::Colour (0xff141312));
+        g.drawLine (centre.x - 3.0f, centre.y - 0.4f, centre.x + 3.0f, centre.y - 0.4f, 1.5f);
+        g.setColour (juce::Colours::white.withAlpha (0.30f));
+        g.drawLine (centre.x - 3.0f, centre.y + 0.6f, centre.x + 3.0f, centre.y + 0.6f, 0.7f);
     }
 
     /** Engraved strip caption used to head each dual-mono channel row. */
@@ -147,55 +234,76 @@ namespace
         g.drawText (sub, r, juce::Justification::centredRight);
     }
 
-    /** Places one meter plus a row of knob cells inside a channel strip.
-        The 670 leads each row with a large bezelled dial, then walks the
-        controls left to right with engraved legends underneath. */
+    /** Places one meter plus five equal control cells in a channel deck. */
     void placeChannelStrip (juce::Rectangle<int> strip, juce::Component& meter,
                            std::initializer_list<std::pair<juce::Slider*, juce::Label*>> controls,
                            juce::Slider* ringDial = nullptr,
                            juce::Label* ringLabel = nullptr)
     {
-        auto body = strip.reduced (4, 0);
-        body.removeFromTop (legendLineHeight + 2); // strip caption
+        auto body = strip.reduced (14, 0);
+        body.removeFromTop (channelHeaderHeight);
+        body = body.reduced (0, 4);
 
-        constexpr int gap = 4;
-        // Meters keep a dial-like aspect ratio instead of stretching with the
-        // row, so the engraved scale and needle stay proportional.
-        const int meterWidth = juce::jlimit (96, 150,
-                                             juce::roundToInt (body.getWidth() * 0.13f));
-        const int meterHeight = juce::jmin (body.getHeight(), juce::roundToInt (meterWidth * 1.28f));
+        // Landscape instrument window. The extra height over the old 0.72
+        // aspect gives the printed arc and its figures room without enlarging
+        // the black movement mask.
+        const int meterWidth = juce::jlimit (150, 198,
+                                             juce::roundToInt (body.getWidth() * 0.16f));
+        const int meterHeight = juce::jmin (body.getHeight(), juce::roundToInt (meterWidth * 0.80f));
         meter.setBounds (body.removeFromLeft (meterWidth)
                              .withSizeKeepingCentre (meterWidth, meterHeight));
-        body.removeFromLeft (gap);
+        body.removeFromLeft (18);
 
-        // The ring dial gets a cell of its own so it can be drawn larger than
-        // the surrounding knobs, which is what makes it read as the primary
-        // control on a 670-class faceplate.
+        // One knob scale for the whole deck. The cell width decides the
+        // horizontal fit; row height only raises the cap on large windows.
+        const int maxKnobSize = juce::jlimit (120, 220,
+                                              juce::roundToInt (body.getHeight() * 0.80f));
+        const int count = static_cast<int> (controls.size()) + (ringDial != nullptr ? 1 : 0);
+        const int usableWidth = juce::jmax (0, body.getWidth()
+                                                   - channelColumnGap * juce::jmax (0, count - 1));
+        const int ringBonus = ringDial != nullptr ? 14 : 0;
+        const int distributableWidth = juce::jmax (0, usableWidth - ringBonus);
+        const int baseCellWidth = count > 0 ? distributableWidth / count : 0;
+        const int extraPixels = count > 0 ? distributableWidth % count : 0;
+        int column = 0;
+
         if (ringDial != nullptr && ringLabel != nullptr)
         {
-            const int count = juce::jmax (1, static_cast<int> (controls.size()) + 1);
-            const int cellWidth = juce::jmax (1, body.getWidth() / count);
+            const int cellWidth = baseCellWidth + (extraPixels > 0 ? 1 : 0) + ringBonus;
             auto cell = body.removeFromLeft (cellWidth);
-            auto labelArea = cell.removeFromBottom (26).reduced (2, 0);
-            cell.removeFromBottom (4);
-            // The ring dial must stay visibly larger than the surrounding
-            // knobs or the hierarchy inverts; the knob cap in placeKnob() is
-            // the size it has to beat.
-            const int dialSize = juce::jmax (1, juce::jmin (134, juce::jmin (cell.getWidth(),
-                                                                           cell.getHeight())));
-            ringDial->setBounds (cell.withSizeKeepingCentre (dialSize, dialSize));
-            ringLabel->setBounds (labelArea);
-            body.removeFromLeft (gap);
+            const int dialSize = juce::jmax (1, juce::jmin (maxKnobSize + ringBonus,
+                                                            juce::jmin (cell.getWidth() - 4,
+                                                                        cell.getHeight() - legendLineHeight - 5)));
+            const int clusterHeight = legendLineHeight + 5 + dialSize;
+            auto cluster = cell.withSizeKeepingCentre (cell.getWidth(), clusterHeight);
+            auto labelArea = cluster.removeFromTop (legendLineHeight);
+            cluster.removeFromTop (5);
+            ringDial->setBounds (cluster.withSizeKeepingCentre (dialSize, dialSize));
+            ringLabel->setBounds (labelArea.reduced (1, 0));
+            ++column;
+            if (controls.size() > 0)
+                body.removeFromLeft (channelColumnGap);
         }
 
-        placeKnobRow (body, controls);
+        for (auto [slider, label] : controls)
+        {
+            const int cellWidth = baseCellWidth + (column < extraPixels ? 1 : 0);
+            auto cell = body.removeFromLeft (cellWidth);
+            placeKnob (cell, *slider, *label, maxKnobSize);
+            ++column;
+            if (column < count)
+                body.removeFromLeft (channelColumnGap);
+        }
     }
 
     /** Small engraved caption above a combo box or switch in the utility row. */
     void placeUtilityControl (juce::Rectangle<int> area, juce::Label& label, juce::Component& control)
     {
+        label.setFont (juce::FontOptions (8.8f, juce::Font::bold));
+        label.setMinimumHorizontalScale (0.65f);
         label.setBounds (area.removeFromTop (legendLineHeight).reduced (1, 0));
-        control.setBounds (area.reduced (6, 2));
+        area.removeFromTop (3);
+        control.setBounds (area.reduced (3, 0));
     }
 }
 
@@ -708,6 +816,14 @@ void TubeCompAudioProcessorEditor::commitGestureTransaction()
 
 void TubeCompAudioProcessorEditor::timerCallback()
 {
+    // The first resize happens before the editor has a peer, so the cache is
+    // built at 1x and rebuilt here once the real display scale is known.
+    const float wantedScale = getPeer() != nullptr
+        ? juce::jlimit (1.0f, 3.0f, static_cast<float> (getPeer()->getPlatformScaleFactor()))
+        : 1.0f;
+    if (std::abs (wantedScale - panelCacheScale) > 0.01f)
+        rebuildPanelCache();
+
     const auto programName = processorRef.getProgramName (getDisplayedProgram());
     if (presetNameLabel.getText() != programName)
         presetNameLabel.setText (programName, juce::dontSendNotification);
@@ -719,13 +835,32 @@ void TubeCompAudioProcessorEditor::timerCallback()
 
 void TubeCompAudioProcessorEditor::paint (juce::Graphics& g)
 {
+    if (panelCache.isValid())
+        g.drawImage (panelCache, getLocalBounds().toFloat());
+    else
+        paintPanel (g);
+
+    // Hover/turn readout shares the footer line: it replaces the product tag
+    // while a control is under the pointer, so the name plate stays readable.
+    const auto layout = makeEditorLayout (getLocalBounds());
+    const auto& footer = layout.footer;
+    g.setFont (juce::FontOptions (readoutText.isNotEmpty() ? 10.0f : 9.0f, juce::Font::bold));
+    g.setColour (readoutText.isNotEmpty() ? accentGold : dimText.withAlpha (0.72f));
+    g.drawFittedText (readoutText.isNotEmpty()
+                          ? readoutText
+                          : juce::String ("VARIABLE-MU  /  DUAL-MONO  /  CLASS-A TUBE COMPRESSOR"),
+                      footer, juce::Justification::centred, 1);
+}
+
+void TubeCompAudioProcessorEditor::paintPanel (juce::Graphics& g)
+{
     auto bounds = getLocalBounds().toFloat();
     const auto layout = makeEditorLayout (getLocalBounds());
 
     if (bounds.isEmpty())
         return;
 
-    // Chassis surround, then the oxblood anodised faceplate inset inside it.
+    // Chassis surround, then the graphite bakelite faceplate inset inside it.
     g.setColour (plateShadow);
     g.fillAll();
     juce::ColourGradient panelGrad (panelTop, bounds.getX(), bounds.getY(),
@@ -785,9 +920,24 @@ void TubeCompAudioProcessorEditor::paint (juce::Graphics& g)
                     recess.getY() + 2.0f, 1.0f);
     }
 
-    g.setColour (juce::Colours::white.withAlpha (0.022f));
-    for (float yPos = face.getY(); yPos < face.getBottom(); yPos += 4.0f)
-        g.drawLine (face.getX(), yPos, face.getRight(), yPos, 1.0f);
+    // Paint tooth: a slow cloud of aged enamel plus full-resolution grain.
+    // Both tiles are generated once; tiling keeps the repeat invisible at a
+    // few percent alpha, which is all a matte panel needs.
+    g.setTiledImageFill (panelCloudTile(), 0, 0, 1.0f);
+    g.fillRect (face);
+    g.setTiledImageFill (panelGrainTile(), 0, 0, 1.0f);
+    g.fillRect (face);
+
+    // Lamp sheen: one broad, very soft pool of light from the upper left. It
+    // is what tells the eye the panel is painted metal rather than a gradient.
+    {
+        juce::ColourGradient sheen (juce::Colours::white.withAlpha (0.050f),
+                                    face.getX() + face.getWidth() * 0.16f, face.getY(),
+                                    juce::Colours::transparentWhite,
+                                    face.getRight(), face.getBottom(), true);
+        g.setGradientFill (sheen);
+        g.fillRect (face);
+    }
     // Corner falloff only. A radial gradient large enough to reach the corners
     // leaves a visible seam along each axis, so the darkening is applied as
     // four edge bands instead.
@@ -815,31 +965,10 @@ void TubeCompAudioProcessorEditor::paint (juce::Graphics& g)
     // with the channel it drives, so the dual-mono structure is explicit.
     auto headerFor = [] (const juce::Rectangle<int>& strip)
     {
-        return strip.reduced (4, 0).removeFromTop (legendLineHeight + 2);
+        return strip.reduced (14, 0).removeFromTop (channelHeaderHeight);
     };
     drawStripHeader (g, headerFor (layout.upperStrip), "LEFT CHANNEL", "VARI-MU  /  12AX7");
     drawStripHeader (g, headerFor (layout.lowerStrip), "RIGHT CHANNEL", "VARI-MU  /  12AX7");
-
-    // Section seams. The 670 separates the dual channel field from the lower
-    // utility section with a machined groove, so the two halves of the panel
-    // read as distinct assemblies rather than one continuous field. Drawn as
-    // a hairline engraved groove with a light lower lip so it catches the same
-    // top-lit shading as the faceplate bevel without becoming a black bar.
-    const auto drawSeam = [&g] (const juce::Rectangle<int>& seamBounds)
-    {
-        auto seam = seamBounds.toFloat().reduced (4.0f, 0.0f);
-        const float grooveY = seam.getCentreY() - 0.5f;
-        g.setColour (juce::Colours::black.withAlpha (0.30f));
-        g.fillRect (seam.getX(), grooveY, seam.getWidth(), 1.0f);
-        g.setColour (juce::Colours::white.withAlpha (0.07f));
-        g.fillRect (seam.getX(), grooveY + 1.0f, seam.getWidth(), 1.0f);
-    };
-    // The gap between the two channel rows.
-    drawSeam (layout.upperStrip.withTop (layout.upperStrip.getBottom())
-                             .withHeight (layout.lowerStrip.getY() - layout.upperStrip.getBottom()));
-    // The gap between the channel field and the utility band.
-    drawSeam (layout.lowerStrip.withTop (layout.lowerStrip.getBottom())
-                             .withHeight (layout.utilityStrip.getY() - layout.lowerStrip.getBottom()));
 
     // Cream bottom name plate. The original carries a long engraved warning
     // strip here; this carries the product identity and the live readout
@@ -864,15 +993,24 @@ void TubeCompAudioProcessorEditor::paint (juce::Graphics& g)
     g.drawText ("VARIABLE-MU  /  MODEL EON-670", plateText.removeFromLeft (plateText.getWidth() * 0.54f),
                 juce::Justification::centred);
 
-    // Hover/turn readout shares the footer line: it replaces the product tag
-    // while a control is under the pointer, so the name plate stays readable.
-    const auto& footer = layout.footer;
-    g.setFont (juce::FontOptions (readoutText.isNotEmpty() ? 10.0f : 9.0f, juce::Font::bold));
-    g.setColour (readoutText.isNotEmpty() ? accentGold : dimText.withAlpha (0.72f));
-    g.drawFittedText (readoutText.isNotEmpty()
-                          ? readoutText
-                          : juce::String ("VARIABLE-MU  /  DUAL-MONO  /  CLASS-A TUBE COMPRESSOR"),
-                      footer, juce::Justification::centred, 1);
+}
+
+void TubeCompAudioProcessorEditor::rebuildPanelCache()
+{
+    if (getWidth() <= 0 || getHeight() <= 0)
+        return;
+
+    float scale = 1.0f;
+    if (auto* peer = getPeer())
+        scale = juce::jlimit (1.0f, 3.0f, static_cast<float> (peer->getPlatformScaleFactor()));
+
+    panelCache = juce::Image (juce::Image::ARGB,
+                              juce::roundToInt (getWidth() * scale),
+                              juce::roundToInt (getHeight() * scale), true);
+    juce::Graphics g (panelCache);
+    g.addTransform (juce::AffineTransform::scale (scale));
+    paintPanel (g);
+    panelCacheScale = scale;
 }
 
 void TubeCompAudioProcessorEditor::resized()
@@ -920,11 +1058,12 @@ void TubeCompAudioProcessorEditor::resized()
     // the mode switches that sit below the two main control rows. The strip is
     // shared with a fixed budget so every element keeps its minimum width at
     // the smallest supported window instead of overrunning the faceplate.
-    auto utility = layout.utilityStrip.reduced (4, 0);
-    constexpr int utilityGap = 8;
-    const int utilityMeterWidth = 96;
+    auto utility = layout.utilityStrip.reduced (14, 6);
+    constexpr int utilityGap = 18;
+    const int utilityMeterWidth = juce::jlimit (128, 150,
+                                                juce::roundToInt (utility.getWidth() * 0.13f));
     const int utilityMeterHeight = juce::jmin (utility.getHeight(),
-                                              juce::roundToInt (utilityMeterWidth * 1.28f));
+                                              juce::roundToInt (utilityMeterWidth * 0.80f));
     gainReductionMeter.setBounds (utility.removeFromLeft (utilityMeterWidth)
                                       .withSizeKeepingCentre (utilityMeterWidth, utilityMeterHeight));
     utility.removeFromLeft (utilityGap);
@@ -953,40 +1092,57 @@ void TubeCompAudioProcessorEditor::resized()
         { nullptr, &bypassButton }
     };
 
-    constexpr int cellGap = 6;
-    const int switchGap = 6;
+    constexpr int cellGap = 16;
+    constexpr int switchGap = 12;
     const int knobCount = static_cast<int> (std::size (knobCells));
     const int switchCount = static_cast<int> (std::size (switchCells));
-    // Give the switches exactly the width they need, then hand the remainder
-    // to the trims. Computing the switch width from the leftover total is what
-    // pushed the last cell off the faceplate.
-    constexpr int minSwitchWidth = 96;
-    const int totalGaps = cellGap * knobCount + switchGap * (switchCount - 1);
-    const int reservedForSwitches = juce::jmin (switchCount * minSwitchWidth,
-                                               juce::jmax (0, utility.getWidth() * 7 / 10));
-    const int usableKnobWidth = juce::jmax (knobCount * 54,
-                                           utility.getWidth() - reservedForSwitches - totalGaps);
-
-    auto knobRow = utility.removeFromLeft (usableKnobWidth);
+    // The switch block is always a 4 x 2 rank so its legends never become a
+    // row of ellipses at the minimum width. The trims use the remaining span.
+    constexpr int switchColumns = 4;
+    constexpr int switchRows = 2;
+    constexpr int minSwitchBlockWidth = switchColumns * 96 + switchGap * (switchColumns - 1);
+    const int switchBlockWidth = juce::jmax (minSwitchBlockWidth,
+                                             juce::roundToInt (utility.getWidth() * 0.58f));
+    auto switchBlock = utility.removeFromRight (juce::jmin (utility.getWidth(), switchBlockWidth));
+    utility.removeFromRight (cellGap);
+    auto knobRow = utility;
+    const int trimKnobSize = juce::jlimit (54, 84,
+                                           juce::roundToInt (knobRow.getWidth() / knobCount * 0.72f));
     placeKnobRow (knobRow, { { &mixSlider, &mixLabel },
                              { &outputGainSlider, &outputGainLabel },
                              { &lookAheadSlider, &lookAheadLabel },
-                             { &sidechainHPFSlider, &sidechainHPFLabel } });
-    utility.removeFromLeft (cellGap);
+                             { &sidechainHPFSlider, &sidechainHPFLabel } },
+                  trimKnobSize);
 
-    const int switchUsable = juce::jmax (0, utility.getWidth() - switchGap * (switchCount - 1));
-    const int switchBase = switchUsable / switchCount;
-    const int switchExtra = switchUsable % switchCount;
-    int index = 0;
-    for (const auto& cell : switchCells)
+    const int rowGap = 8;
+    const int rowHeight = (switchBlock.getHeight() - rowGap * (switchRows - 1)) / switchRows;
+
+    for (int row = 0; row < switchRows; ++row)
     {
-        const int cellWidth = switchBase + (index < switchExtra ? 1 : 0);
-        auto cellArea = utility.removeFromLeft (cellWidth);
-        if (cell.label != nullptr)
-            placeUtilityControl (cellArea, *cell.label, *cell.control);
-        else
-            cell.control->setBounds (cellArea.reduced (2, 14));
-        if (++index < switchCount)
-            utility.removeFromLeft (switchGap);
+        auto rowArea = switchBlock.removeFromTop (rowHeight);
+        const int first = row * switchColumns;
+        const int count = juce::jmin (switchColumns, switchCount - first);
+        const int usable = juce::jmax (0, rowArea.getWidth() - switchGap * (count - 1));
+        const int baseWidth = usable / juce::jmax (1, count);
+        const int extra = usable % juce::jmax (1, count);
+
+        for (int column = 0; column < count; ++column)
+        {
+            const int cellWidth = baseWidth + (column < extra ? 1 : 0);
+            auto cellArea = rowArea.removeFromLeft (cellWidth);
+            const auto& cell = switchCells[static_cast<size_t> (first + column)];
+            if (cell.label != nullptr)
+                placeUtilityControl (cellArea, *cell.label, *cell.control);
+            else
+                cell.control->setBounds (cellArea.reduced (3, 2));
+
+            if (column + 1 < count)
+                rowArea.removeFromLeft (switchGap);
+        }
+
+        if (row + 1 < switchRows)
+            switchBlock.removeFromTop (rowGap);
     }
+
+    rebuildPanelCache();
 }

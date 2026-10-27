@@ -29,9 +29,10 @@ FetchContent_Declare(melatonin_inspector
 FetchContent_MakeAvailable(melatonin_inspector)
 
 juce_add_plugin(eonchild
-    COMPANY_NAME "EON"
-    COMPANY_COPYRIGHT "Copyright (c) 2026 EON"
-    PLUGIN_MANUFACTURER_CODE Eonn
+    COMPANY_NAME "EEF LABs"
+    COMPANY_COPYRIGHT "Copyright (c) 2026 EEF LABs"
+    BUNDLE_ID com.eeflabs.eonchild
+    PLUGIN_MANUFACTURER_CODE EEFL
     PLUGIN_CODE Eonc
     FORMATS AU VST3 Standalone
     PRODUCT_NAME "EON-Vari mu DSP"

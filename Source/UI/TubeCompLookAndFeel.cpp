@@ -171,10 +171,10 @@ void TubeCompLookAndFeel::drawTurnedKnob (juce::Graphics& g, juce::Point<float> 
     // gradient side walls) is what separates this from a generic round widget.
     {
         // Body cone: widest at the base, narrowing to the top face.
-        juce::ColourGradient rimGrad (juce::Colour (0xff1c1e20), centre.x - radius * 0.55f,
+        juce::ColourGradient rimGrad (juce::Colour (0xff55534d), centre.x - radius * 0.55f,
                                       centre.y - radius * 0.72f,
-                                      juce::Colour (0xff3f4448), centre.x + radius * 0.62f,
-                                      centre.y + radius * 0.55f, true);
+                                      juce::Colour (0xff050505), centre.x + radius * 0.62f,
+                                      centre.y + radius * 0.55f, false);
         g.setGradientFill (rimGrad);
         g.fillEllipse (centre.x - radius, centre.y - radius, radius * 2.0f, radius * 2.0f);
 
@@ -199,8 +199,24 @@ void TubeCompLookAndFeel::drawTurnedKnob (juce::Graphics& g, juce::Point<float> 
             g.strokePath (p, juce::PathStrokeType (thickness));
         };
 
-        arc (150.0f, 300.0f, juce::Colours::white.withAlpha (0.22f), 2.0f);
-        arc (-40.0f, 40.0f, juce::Colours::black.withAlpha (0.60f), 2.6f);
+        arc (150.0f, 300.0f, juce::Colours::white.withAlpha (0.34f), 1.6f);
+        arc (-40.0f, 40.0f, juce::Colours::black.withAlpha (0.70f), 2.6f);
+
+        // Knurled grip. The 670's knobs are milled, and those fine ribs are
+        // most of what separates a photograph of a knob from a drawn circle.
+        // The count follows the radius so a 35 px trim knob does not alias.
+        const int ridges = juce::jlimit (48, 220, juce::roundToInt (radius * 2.6f));
+        for (int i = 0; i < ridges; ++i)
+        {
+            const float a = juce::MathConstants<float>::twoPi * static_cast<float> (i)
+                            / static_cast<float> (ridges);
+            const auto inner = centre.getPointOnCircumference (radius * 0.945f, a);
+            const auto outer = centre.getPointOnCircumference (radius * 0.998f, a);
+            const bool lit = std::cos (a - lightAngle) > 0.0f;
+            g.setColour (lit ? juce::Colours::white.withAlpha (0.16f)
+                             : juce::Colours::black.withAlpha (0.45f));
+            g.drawLine ({ inner, outer }, 0.9f);
+        }
 
         // Inner wall of the cone where it meets the top face: a dark ring plus
         // a thin bright edge on the lit side, so the top reads as raised.
@@ -213,11 +229,22 @@ void TubeCompLookAndFeel::drawTurnedKnob (juce::Graphics& g, juce::Point<float> 
     // knobs are glossy enough to carry a hard specular streak, which is the
     // single strongest "this is a real part" cue in the photograph.
     {
-        juce::ColourGradient faceGrad (juce::Colour (0xff2b2e31), centre.x - domeRadius * 0.5f,
+        juce::ColourGradient faceGrad (juce::Colour (0xff3d3c37), centre.x - domeRadius * 0.5f,
                                        centre.y - domeRadius * 0.72f,
-                                       juce::Colour (0xff08090a), centre.x + domeRadius * 0.55f,
+                                       juce::Colour (0xff050505), centre.x + domeRadius * 0.55f,
                                        centre.y + domeRadius * 0.62f, true);
         g.setGradientFill (faceGrad);
+        g.fillEllipse (centre.x - domeRadius, centre.y - domeRadius,
+                       domeRadius * 2.0f, domeRadius * 2.0f);
+
+        // Broad gloss: the panel lamp is reflected as one soft pool on the
+        // upper-left of the dome, not as an even wash over the whole face.
+        const auto glossCentre = centre + (light - centre) * 0.42f;
+        juce::ColourGradient gloss (juce::Colours::white.withAlpha (0.13f),
+                                    glossCentre.x, glossCentre.y,
+                                    juce::Colours::transparentWhite, centre.x, centre.y,
+                                    true);
+        g.setGradientFill (gloss);
         g.fillEllipse (centre.x - domeRadius, centre.y - domeRadius,
                        domeRadius * 2.0f, domeRadius * 2.0f);
     }
@@ -247,12 +274,12 @@ void TubeCompLookAndFeel::drawTurnedKnob (juce::Graphics& g, juce::Point<float> 
             else
                 spec.lineTo (pt);
         }
-        g.setColour (juce::Colours::white.withAlpha (0.42f));
-        g.strokePath (spec, juce::PathStrokeType (1.8f));
+        g.setColour (juce::Colours::white.withAlpha (0.50f));
+        g.strokePath (spec, juce::PathStrokeType (1.6f));
 
         // A second, fainter and wider bloom just inside it for the glossy
         // falloff that a hard edge alone does not convey.
-        g.setColour (juce::Colours::white.withAlpha (0.05f));
+        g.setColour (juce::Colours::white.withAlpha (0.07f));
         g.strokePath (spec, juce::PathStrokeType (5.0f));
     }
 
@@ -302,7 +329,7 @@ void TubeCompLookAndFeel::drawRingDial (juce::Graphics& g, juce::Rectangle<float
     // The 670 threshold control is the largest knob on the faceplate, with a
     // printed 0-10 scale around it and no bezel. It gets extra range marks and
     // a wider sweep than the other controls because it is the primary dial.
-    const float knobRadius = outerRadius * 0.50f;
+    const float knobRadius = outerRadius * 0.64f;
 
     // Printed scale with numbered fence positions.
     drawPrintedScale (g, centre, knobRadius * 1.18f, outerRadius * 0.80f, 11,
@@ -350,10 +377,11 @@ void TubeCompLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int
     // no bezel over it, so the control reads as a scale plus a pointer rather
     // than a self-contained dial. Keeping that split is what makes the panel
     // look like hardware rather than a software widget.
-    const float bodyRadius = outerRadius * 0.62f;
+    const float bodyRadius = outerRadius * 0.67f;
 
     // Printed scale on the panel, outside the knob.
-    drawPrintedScale (g, centre, outerRadius * 0.82f, outerRadius * 0.98f, 11,
+    const int fences = outerRadius < 38.0f ? 7 : 11;
+    drawPrintedScale (g, centre, outerRadius * 0.82f, outerRadius * 0.98f, fences,
                       sweepStart, sweepEnd, false);
 
     drawTurnedKnob (g, centre, bodyRadius, angle, lightAngleRadians, 0.88f, false);

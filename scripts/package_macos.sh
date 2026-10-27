@@ -174,7 +174,7 @@ if [[ "${SKIP_INSTALL}" -eq 0 ]]; then
 
     if [[ "${RUN_AUVAL}" -eq 1 ]]; then
         killall -9 AudioComponentRegistrar 2>/dev/null || true
-        auval -v aufx Eonc Eonn
+        auval -v aufx Eonc EEFL
     fi
 fi
 

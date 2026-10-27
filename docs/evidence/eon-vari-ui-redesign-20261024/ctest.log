@@ -1,0 +1,35 @@
+Test project /Users/sungha/Desktop/EON LLM wiki/EON Audio Plugin/Tube comp/build-ci
+      Start  1: dsp_sanity
+ 1/15 Test  #1: dsp_sanity .......................   Passed    0.29 sec
+      Start  2: compressor_sanity
+ 2/15 Test  #2: compressor_sanity ................   Passed    0.02 sec
+      Start  3: compressor_program
+ 3/15 Test  #3: compressor_program ...............   Passed    0.03 sec
+      Start  4: compressor_feedback
+ 4/15 Test  #4: compressor_feedback ..............   Passed    0.03 sec
+      Start  5: triode_bias_program
+ 5/15 Test  #5: triode_bias_program ..............   Passed    0.24 sec
+      Start  6: dry_delay_line
+ 6/15 Test  #6: dry_delay_line ...................   Passed    0.01 sec
+      Start  7: saturator_shape
+ 7/15 Test  #7: saturator_shape ..................   Passed    0.07 sec
+      Start  8: processor_latency
+ 8/15 Test  #8: processor_latency ................   Passed    2.14 sec
+      Start  9: koren_slope
+ 9/15 Test  #9: koren_slope ......................   Passed    0.02 sec
+      Start 10: triode_polarity
+10/15 Test #10: triode_polarity ..................   Passed    0.20 sec
+      Start 11: host_bypass
+11/15 Test #11: host_bypass ......................   Passed    0.06 sec
+      Start 12: feedback_ratio
+12/15 Test #12: feedback_ratio ...................   Passed    0.59 sec
+      Start 13: vari_mu_thump
+13/15 Test #13: vari_mu_thump ....................   Passed    1.60 sec
+      Start 14: block_size_invariance
+14/15 Test #14: block_size_invariance ............   Passed    1.98 sec
+      Start 15: mix_alignment
+15/15 Test #15: mix_alignment ....................   Passed   12.35 sec
+
+100% tests passed out of 15
+
+Total Test time (real) =  19.63 sec

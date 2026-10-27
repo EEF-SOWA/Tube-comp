@@ -4,7 +4,7 @@
 
 /**
     Hardware-panel look, styled after Fairchild-670-class hybrid tube gear:
-    oxblood-anodised faceplate, black knurled knobs with white index dots,
+    graphite-bakelite faceplate, black knurled knobs with white index dots,
     large engraved ring dials, mini lever-style rotary switches with etched
     position fences, and toggle switches with LED indicators.
 

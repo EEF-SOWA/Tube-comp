@@ -1,0 +1,4 @@
+d8fa6511ee8491a0444673304e5694bc6745a3acb277075a1dd2a5f4a08e7123  build-ci/eonchild_artefacts/Release/VST3/EON-Vari mu DSP.vst3/Contents/MacOS/EON-Vari mu DSP
+d8fa6511ee8491a0444673304e5694bc6745a3acb277075a1dd2a5f4a08e7123  /Users/sungha/Library/Audio/Plug-Ins/VST3/EON-Vari mu DSP.vst3/Contents/MacOS/EON-Vari mu DSP
+69fd78a4b5b4ad3aaea2ee99b45bf8d4cfd2d08aafa58946a6995acc9c4cf372  build-ci/eonchild_artefacts/Release/AU/EON-Vari mu DSP.component/Contents/MacOS/EON-Vari mu DSP
+69fd78a4b5b4ad3aaea2ee99b45bf8d4cfd2d08aafa58946a6995acc9c4cf372  /Users/sungha/Library/Audio/Plug-Ins/Components/EON-Vari mu DSP.component/Contents/MacOS/EON-Vari mu DSP

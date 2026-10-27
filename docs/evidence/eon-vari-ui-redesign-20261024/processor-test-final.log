@@ -1,0 +1,19 @@
+wet: peak 480, reported latency 480, pre-impulse max 0.00000000
+bypass: peak 480, latency 480, L 0.500000, R -0.500000, nonzero 1
+mix 0% vs bypass: max diff 0.00000000
+quality switch: latency 480 -> 507, bypass peak 507
+block 128: latency 480, peak 480, diff vs block 64 0.00000000
+block 512: latency 480, peak 480, diff vs block 64 0.00000000
+state round-trip mismatches: 0
+model match: nominal 0.04 dB, hot 1.33 dB, extreme 1.93 dB
+time-constant ownership: custom(900ms) 13.97 dB, TC1+slow knobs 10.02 dB, TC1+fast knobs 10.02 dB
+meter taps: in -12.04 dBFS, out -12.04 dBFS, 0VU 0.870, GR 1/24 0.215/1.000
+VU needle: peak 1.014 after rise, settled yes, fall end 0.0000
+  bias 0.45 V: H2 -8.4 dBc (+1.6 vs neutral), level +0.01 dB
+  bias 0.90 V: H2 -7.0 dBc (+3.0 vs neutral), level +0.06 dB
+  bias 1.35 V: H2 -5.8 dBc (+4.2 vs neutral), level +0.08 dB
+  bias 1.80 V: H2 -4.7 dBc (+5.3 vs neutral), level -0.01 dB
+vari-mu coupling: H2 neutral -10.0 dBc, deep -4.7 dBc, worst level error 0.08 dB
+coupling wiring: bias gentle -0.3683 V, hard -1.3866 V
+stability stress: peak 4.651, non-finite 0
+PASS

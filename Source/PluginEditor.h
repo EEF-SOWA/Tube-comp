@@ -20,6 +20,10 @@ public:
     ~TubeCompAudioProcessorEditor() override;
 
     void paint (juce::Graphics&) override;
+    /** Static faceplate: chassis, texture, legends, screws. Rendered once per
+        resize into an image so the 15 Hz repaint only costs the readout line. */
+    void paintPanel (juce::Graphics&);
+    void rebuildPanelCache();
     void resized() override;
 
 private:
@@ -130,6 +134,9 @@ private:
     juce::String readoutText;
     std::vector<std::pair<juce::Slider*, juce::String>> readoutMap;
     std::vector<std::pair<juce::ComboBox*, juce::String>> readoutComboMap;
+
+    juce::Image panelCache;
+    float panelCacheScale = 1.0f;
 
 #if defined(MELATONIN_INSPECTOR_ENABLED)
     melatonin::Inspector inspector { *this, false };
